@@ -4,7 +4,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::{env, fs};
 
-use nix::mount::{MsFlags, mount, umount};
+use nix::mount::{mount, umount, umount2, MntFlags, MsFlags};
 use nix::sched::{CloneFlags, clone};
 use nix::sys::signal::Signal;
 use nix::sys::wait::{self, WaitStatus};
@@ -62,9 +62,9 @@ fn child_main() -> isize {
             None::<&Path>,
         )
         .expect("failed to bind mount the new rootfs");
-        chdir(new_root).expect("failed to change directory");
         pivot_root(".", ".").expect("failed to stack mount the new rootfs");
-        umount(".").expect("failed to unmount old rootfs");
+        chdir(new_root).expect("failed to change directory");
+        umount2(".", MntFlags::MNT_DETACH).expect("failed to unmount old rootfs");
     };
 
     let shell_path = CString::new("/bin/sh").expect("failed to created C nul-terminated string");
