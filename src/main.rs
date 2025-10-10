@@ -1,11 +1,44 @@
+use std::error::Error;
 use std::ffi::CString;
+use std::io::BufReader;
+use std::path::Path;
+use std::{env, fs};
 
+use nix::mount::{MsFlags, mount, umount};
 use nix::sched::{CloneFlags, clone};
 use nix::sys::signal::Signal;
 use nix::sys::wait::{self, WaitStatus};
-use nix::unistd::execv;
+use nix::unistd::{chdir, execv, pivot_root};
+
+use serde::Deserialize;
 
 const STACK_SIZE: usize = 1024 * 1024;
+
+#[derive(Deserialize, Debug)]
+struct OCIProcess {
+    args: Vec<String>,
+    env: Vec<String>,
+    cwd: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct OCIRoot {
+    path: String,
+    readonly: bool,
+}
+
+#[derive(Deserialize, Debug)]
+struct OCIConfig {
+    process: OCIProcess,
+    root: OCIRoot,
+}
+
+fn read_from_file(file: fs::File) -> Result<OCIConfig, Box<dyn Error>> {
+    let buf = BufReader::new(file);
+    let config = serde_json::from_reader(buf)?;
+
+    Ok(config)
+}
 
 fn child_main() -> isize {
     println!("Child process: Setting up environment...");
@@ -18,8 +51,21 @@ fn child_main() -> isize {
             eprintln!("Child process: sethostname failed.");
             return 1;
         }
+        println!("Child process: hostname of process changed.");
+
+        let new_root = "./oci-bundle/rootfs";
+        mount(
+            Some(new_root),
+            new_root.as_bytes(),
+            None::<&Path>,
+            MsFlags::MS_BIND,
+            None::<&Path>,
+        )
+        .expect("failed to bind mount the new rootfs");
+        chdir(new_root).expect("failed to change directory");
+        pivot_root(".", ".").expect("failed to stack mount the new rootfs");
+        umount(".").expect("failed to unmount old rootfs");
     };
-    println!("Child process: hostname of process changed.");
 
     let shell_path = CString::new("/bin/sh").expect("failed to created C nul-terminated string");
     let shell_args = [shell_path.as_c_str()];
@@ -32,7 +78,11 @@ fn child_main() -> isize {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
+    let args: Vec<String> = env::args().collect();
+    let oci_config = read_from_file(fs::File::open(&args[1])?)?;
+    println!("{oci_config:#?}");
+
     let mut stack = [0_u8; STACK_SIZE];
 
     println!("Parent process: about to create a child process");
@@ -48,16 +98,15 @@ fn main() {
                 println!(
                     "Parent process: child process {} exited with code {}",
                     child_pid, exit_code
-                )
+                );
+                Ok(())
             }
-            Ok(status) => {
-                println!(
-                    "Parent process: child process exited with unexpected status {:?}",
-                    status
-                )
-            }
-            Err(err) => eprintln!("Parent process: waitpid failed with error: {err}"),
+            Ok(status) => Err(format!(
+                "Parent process: child process exited with unexpected status {status:?}"
+            )
+            .into()),
+            Err(err) => Err(format!("Parent process: waitpid failed with error: {err}").into()),
         },
-        Err(err) => eprintln!("Parent process: clone failed with error: {err}"),
+        Err(err) => Err(format!("Parent process: clone failed with error: {err}").into()),
     }
 }
