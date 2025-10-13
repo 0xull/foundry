@@ -186,6 +186,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                         "Parent process: child process {} exited with code {}",
                         child_pid, exit_code
                     );
+                    fs::remove_dir(&container_cgroup_path)?;
+                    
+                    // TODO: Remove foundry cgroup when all container cgroup are deleted.
+                    // let mut entries = fs::read_dir(&foundry_cgroup_path)?;
+                    // if entries.next().is_none() {
+                    //     fs::remove_dir(foundry_cgroup_path)?;
+                    // }
+
                     Ok(())
                 }
                 Ok(status) => Err(format!(
