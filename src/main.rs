@@ -69,6 +69,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut memory_max_file = fs::File::create(&memory_max_path)?;
     memory_max_file.write_all(b"536870912")?; // 512 * 1024 * 1024
 
+    // disable swap to enforce memory size usage
+    let memory_swap_max_path = container_cgroup_path.join("memory.swap.max");
+    let mut memory_swap_max_file = fs::File::create(&memory_swap_max_path)?;
+    memory_swap_max_file.write_all(b"0")?;
+
     let cpu_max_path = container_cgroup_path.join("cpu.max");
     let mut cpu_max_file = fs::File::create(&cpu_max_path)?;
     cpu_max_file.write_all(b"50000 100000")?;
