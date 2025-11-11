@@ -3,11 +3,19 @@ name = "foundry"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "foundryd"
+path = "src/main.rs"
+
+[[bin]]
+name = "foundry"
+path = "src/bin/foundry.rs"
+
 [dependencies]
 anyhow = "1.0.100"
 chrono = { version = "0.4.42", features = ["serde"] }
 clap = { version = "4.5.49", features = ["derive"] }
-nix = { version = "0.30.1", features = ["sched", "signal", "mount", "dir", "fs"] }
+nix = { version = "0.30.1", features = ["sched", "signal", "mount", "dir", "fs", "user", "process"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 uuid = { version= "1.18.1", features = ["v4"] }

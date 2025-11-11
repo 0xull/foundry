@@ -1,0 +1,13 @@
+[Unit]
+Description=Foundry Container Runtime Daemon
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/foundryd
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
