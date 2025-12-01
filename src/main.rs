@@ -8,6 +8,7 @@ use std::{
     io::{BufRead, BufReader, ErrorKind, Write},
     os::unix::net::{UnixListener, UnixStream},
     path::Path,
+    process::{Command, Stdio},
     thread,
 };
 
@@ -133,6 +134,15 @@ struct OciConfig {
     root: OciRoot,
     hostname: Option<String>,
     linux: Option<OciLinux>,
+}
+
+#[derive(Deserialize, Debug)]
+struct CniConfig {
+    #[serde(rename = "cniVersion")]
+    cni_version: String,
+    name: String,
+    #[serde(rename = "type")]
+    plugin_type: String,
 }
 
 fn main() -> Result<()> {
@@ -283,8 +293,6 @@ fn do_create(args: &CreateParams) -> Result<()> {
     };
     write_container_state(&initial_state, &container_state_path.join("state.json"))?;
 
-    // setsid().with_context(|| "Failed to creation new session.")?;
-
     let foundry_cgroup_path = Path::new(FOUNDRY_CGROUP_DIR);
     if !is_path_existing(foundry_cgroup_path)? {
         fs::create_dir_all(foundry_cgroup_path).with_context(|| {
@@ -401,6 +409,8 @@ fn do_start(args: &LifecycleParams) -> Result<()> {
     }
 
     if let Some(proc_pid) = container_state.pid {
+        setup_cni_network(&args.container_id, proc_pid)?;
+
         let cgroup_procs_path =
             Path::new(FOUNDRY_CGROUP_DIR).join(&format!("{}/cgroup.procs", &args.container_id));
         fs::write(cgroup_procs_path, proc_pid.to_string())
@@ -681,4 +691,62 @@ fn run_container(oci_config: &OciConfig, bundle_path: &str, container_id: &str) 
             return 1;
         }
     }
+}
+
+fn setup_cni_network(container_id: &str, pid: i32) -> Result<()> {
+    println!(
+        "[foundryd] Setting up CNI network for container {}",
+        container_id
+    );
+
+    let cni_config_path = Path::new("/etc/cni/net.d/10-foundry.conf");
+    if !cni_config_path.exists() {
+        return Err(anyhow!(
+            "CNI config file not found at {:?}",
+            cni_config_path
+        ));
+    }
+
+    let cni_config_content = fs::read_to_string(cni_config_path)
+        .with_context(|| "failed to read CNI config's content")?;
+    let cni_config = serde_json::from_str::<CniConfig>(&cni_config_content)
+        .with_context(|| "failed to parse CNI config")?;
+
+    let plugin_path = Path::new("/opt/cni/bin").join(cni_config.plugin_type);
+    if !plugin_path.exists() {
+        return Err(anyhow!("CNI plugin not found at {:?}", plugin_path));
+    }
+
+    let netns_path = format!("/proc/{}/ns/net", pid);
+
+    let mut child = Command::new(&plugin_path)
+        .env("CNI_COMMAND", "ADD")
+        .env("CNI_CONTAINERID", container_id)
+        .env("CNI_NETNS", netns_path)
+        .env("CNI_IFNAME", "eth0")
+        .env("CNI_PATH", "/opt/cni/bin")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .with_context(|| format!("Failed to spawn CNI plugin: {:?}", plugin_path))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(cni_config_content.as_bytes())
+            .with_context(|| "Failed to write CNI config to stdin")?
+    }
+
+    let output = child
+        .wait_with_output()
+        .with_context(|| "Failed to read CNI plugin output")?;
+
+    if !output.status.success() {
+        return Err(anyhow!("CNI plugin exited with error"));
+    }
+
+    let output_str = String::from_utf8_lossy(&output.stdout);
+    println!("[foundryd] CNI Plugin Success. Output: {:?}", &output_str);
+
+    Ok(())
 }
