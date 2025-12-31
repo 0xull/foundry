@@ -7,8 +7,6 @@ This repository contains two distinct subsystems:
 1. **Foundry Runtime (Rust):** A client/server architecture for managing container lifecycles (namespaces, cgroups, chroot).
 2. **Foundry Data Plane (Go/C):** A high-performance forwarding plane leveraging XDP (eXpress Data Path) to handle container traffic in the kernel.
 
----
-
 ## 1. System Architecture
 
 The project follows a split-binary architecture to separate user interaction from state management, further extended by a dedicated programmable data plane.
@@ -25,7 +23,6 @@ The project follows a split-binary architecture to separate user interaction fro
 
 * **XDP Forwarder (Data Plane):** An eBPF program attached to the host-side `veth` interfaces. It currently functions as a transparent Layer 2 bridge, bypassing the host kernel's TCP/IP stack to forward packets between isolated namespaces.
 
----
 
 ## 2. Directory Structure
 
@@ -46,8 +43,6 @@ The project follows a split-binary architecture to separate user interaction fro
 
 ```
 
----
-
 ## 3. Prerequisites
 
 To build and run the full stack, the following toolchains are required:
@@ -62,8 +57,6 @@ To build and run the full stack, the following toolchains are required:
 
 * **Rust (Latest Stable):** For the runtime engine.
 * **Go (1.20+):** For the BPF loader and future SDN agent.
-
----
 
 ## 4. Building and Running
 
@@ -149,9 +142,6 @@ sudo ip netns exec netns1 ping 10.0.0.2
 
 ```
 
-
-
----
 
 ## 5. Development Roadmap
 
