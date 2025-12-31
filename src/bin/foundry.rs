@@ -36,6 +36,7 @@ struct ErrorResponse {
     id: serde_json::Value,
 }
 
+/// CLI argument parser for foundry client commands
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Cli {
@@ -43,6 +44,7 @@ struct Cli {
     command: Commands,
 }
 
+/// Available container lifecycle operations
 #[derive(Parser, Debug)]
 enum Commands {
     /// Create a container
@@ -55,14 +57,17 @@ enum Commands {
     Delete(LifecycleArgs),
 }
 
+/// Arguments for 'create' command: bundle path and container identifier
 #[derive(Parser, Debug)]
 struct CreateArgs {
     /// Path to the OCI bundle directory
     #[arg(required = true)]
     bundle_path: String,
+    /// Unique ID
     container_id: String,
 }
 
+/// Arguments for lifecycle commands (start/kill/delete): container identifier only
 #[derive(Parser, Debug)]
 struct LifecycleArgs {
     /// The unique ID of the container

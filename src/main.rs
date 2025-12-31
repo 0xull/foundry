@@ -127,6 +127,7 @@ struct OciRoot {
     path: String,
 }
 
+/// OCI runtime specification configuration parsed from bundle's config.json
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct OciConfig {
@@ -136,6 +137,7 @@ struct OciConfig {
     linux: Option<OciLinux>,
 }
 
+/// CNI plugin configuration for container network interface setup
 #[derive(Deserialize, Debug)]
 struct CniConfig {
     #[serde(rename = "cniVersion")]
@@ -145,6 +147,7 @@ struct CniConfig {
     plugin_type: String,
 }
 
+/// Daemon entry point: sets up Unix socket listener and spawns connection handlers
 fn main() -> Result<()> {
     println!("[foundryd] Starting daemon...");
 
@@ -187,6 +190,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Processes newline-delimited JSON-RPC requests from client and dispatches to method handlers
 fn handle_connection(mut stream: UnixStream) -> Result<()> {
     println!("[foundryd:handler] Handling client...");
 
@@ -261,12 +265,14 @@ struct CreateParams {
     container_id: String,
 }
 
+/// JSON-RPC handler for 'create' method
 fn handle_create_request(params: serde_json::Value) -> Result<serde_json::Value> {
     let args = serde_json::from_value::<CreateParams>(params)?;
     do_create(&args)?;
     Ok(json!({"status": "created", "id": args.container_id}))
 }
 
+/// Creates container with namespaces, cgroups, and resource limits; clones init process
 fn do_create(args: &CreateParams) -> Result<()> {
     let container_state_path = Path::new(FOUNDRY_STATE_DIR).join(&args.container_id);
     if is_path_existing(&container_state_path)? {
@@ -293,6 +299,7 @@ fn do_create(args: &CreateParams) -> Result<()> {
     };
     write_container_state(&initial_state, &container_state_path.join("state.json"))?;
 
+    // Set up cgroup hierarchy for resource isolation
     let foundry_cgroup_path = Path::new(FOUNDRY_CGROUP_DIR);
     if !is_path_existing(foundry_cgroup_path)? {
         fs::create_dir_all(foundry_cgroup_path).with_context(|| {
@@ -317,6 +324,7 @@ fn do_create(args: &CreateParams) -> Result<()> {
     )
     .with_context(|| "Failed to enable CPU & Memory controllers for container cgroup")?;
 
+    // Apply resource limits from OCI spec
     let oci_config = read_oci_config(&Path::new(&args.bundle_path).join("config.json"))?;
     if let Some(oci_linux) = &oci_config.linux {
         if let Some(oci_resources) = &oci_linux.resources {
@@ -344,6 +352,7 @@ fn do_create(args: &CreateParams) -> Result<()> {
         }
     }
 
+    // Clone init process with PID, UTS, and Mount namespaces
     let mut stack = [0_u8; STACK_SIZE];
     let flags = CloneFlags::CLONE_NEWPID | CloneFlags::CLONE_NEWUTS | CloneFlags::CLONE_NEWNS;
     let sigchld = Some(Signal::SIGCHLD as i32);
@@ -386,12 +395,14 @@ struct LifecycleParams {
     container_id: String,
 }
 
+/// JSON-RPC handler for 'start' method
 fn handle_start_request(params: serde_json::Value) -> Result<serde_json::Value> {
     let args = serde_json::from_value::<LifecycleParams>(params)?;
     do_start(&args)?;
     Ok(json!({"status": "started", "id": args.container_id}))
 }
 
+/// Configures CNI networking, assigns process to cgroup, and signals container to exec
 fn do_start(args: &LifecycleParams) -> Result<()> {
     let container_state_path =
         &Path::new(FOUNDRY_STATE_DIR).join(format!("{}/state.json", &args.container_id));
@@ -440,12 +451,14 @@ fn do_start(args: &LifecycleParams) -> Result<()> {
     Ok(())
 }
 
+/// JSON-RPC handler for 'kill' method
 fn handle_kill_request(params: serde_json::Value) -> Result<serde_json::Value> {
     let args = serde_json::from_value::<LifecycleParams>(params)?;
     do_kill(&args)?;
     Ok(json!({"status": "killed", "id": args.container_id}))
 }
 
+/// Sends SIGKILL to container process and transitions state to Stopped
 fn do_kill(args: &LifecycleParams) -> Result<()> {
     let container_state_path =
         &Path::new(FOUNDRY_STATE_DIR).join(format!("{}/state.json", &args.container_id));
@@ -487,12 +500,14 @@ fn do_kill(args: &LifecycleParams) -> Result<()> {
     Ok(())
 }
 
+/// JSON-RPC handler for 'delete' method
 fn handle_delete_request(params: serde_json::Value) -> Result<serde_json::Value> {
     let args = serde_json::from_value::<LifecycleParams>(params)?;
     do_delete(&args)?;
     Ok(json!({"status": "deleted", "id": args.container_id}))
 }
 
+/// Validates container is stopped and removes all associated resources
 fn do_delete(args: &LifecycleParams) -> Result<()> {
     let container_state_path =
         Path::new(FOUNDRY_STATE_DIR).join(format!("{}/state.json", &args.container_id));
@@ -514,6 +529,7 @@ fn do_delete(args: &LifecycleParams) -> Result<()> {
     Ok(())
 }
 
+/// Removes container state directory and cgroup from filesystem
 fn cleanup_container_resources(container_id: &str) -> Result<()> {
     let container_state_dir = &Path::new(FOUNDRY_STATE_DIR).join(container_id);
     fs::remove_dir_all(container_state_dir).with_context(|| {
@@ -534,6 +550,7 @@ fn cleanup_container_resources(container_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Checks if path exists, returning false on NotFound and error on other failures
 fn is_path_existing(path: &Path) -> Result<bool> {
     match fs::metadata(path) {
         Ok(_) => Ok(true),
@@ -547,18 +564,21 @@ fn is_path_existing(path: &Path) -> Result<bool> {
     }
 }
 
+/// Serializes ContainerState to JSON and writes to disk
 fn write_container_state(state: &ContainerState, path: &Path) -> Result<()> {
     let json_data = serde_json::to_string(state)?;
     fs::write(path, json_data)?;
     Ok(())
 }
 
+/// Reads and deserializes ContainerState from JSON file
 fn read_container_state(path: &Path) -> Result<ContainerState> {
     let json_data = fs::read_to_string(path)?;
     let data: ContainerState = serde_json::from_str(&json_data)?;
     Ok(data)
 }
 
+/// Parses OCI runtime config.json from bundle directory
 fn read_oci_config(path: &Path) -> Result<OciConfig> {
     let file = fs::File::open(path)?;
     let buf = BufReader::new(file);
@@ -567,6 +587,7 @@ fn read_oci_config(path: &Path) -> Result<OciConfig> {
     Ok(config)
 }
 
+/// Container init process: sets up rootfs, mounts filesystems, waits for start signal, then execs
 fn run_container(oci_config: &OciConfig, bundle_path: &str, container_id: &str) -> isize {
     if let Some(hostname) = &oci_config.hostname {
         if let Ok(c_hostname) = CString::new(hostname.as_str()) {
@@ -666,6 +687,7 @@ fn run_container(oci_config: &OciConfig, bundle_path: &str, container_id: &str) 
         return 1;
     }
 
+    // Block until daemon sends SIGUSR1 (after CNI setup completes)
     let mut sig_set = SigSet::empty();
     sig_set.add(Signal::SIGUSR1);
     if let Err(err) = pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&sig_set), None) {
@@ -693,6 +715,7 @@ fn run_container(oci_config: &OciConfig, bundle_path: &str, container_id: &str) 
     }
 }
 
+/// Invokes CNI plugin to configure container network namespace with veth pair and IP address
 fn setup_cni_network(container_id: &str, pid: i32) -> Result<()> {
     println!(
         "[foundryd] Setting up CNI network for container {}",
