@@ -1,2 +1,3 @@
 /target
 /oci-bundle
+/xdp-forwarder/{forwarder*,loader}
