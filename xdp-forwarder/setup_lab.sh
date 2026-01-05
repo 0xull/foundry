@@ -41,6 +41,12 @@ ip netns exec $NS2 ip route add default dev $VETH2_P
 ip link set $VETH1 up
 ip link set $VETH2 up
 
+clang -O2 -g -I /usr/include/$(uname -m)-linux-gnu -target bpf -c ./bpf/dummy.c -o dummy.o
+
+# Attach dummy XDP program to network namespace links
+sudo ip netns exec netns1 ip link set dev veth1-p xdp obj dummy.o sec xdp
+sudo ip netns exec netns2 ip link set dev veth2-p xdp obj dummy.o sec xdp
+
 echo "Disabling IPv6 on host veths reduce noise"
 sysctl -w net.ipv6.conf.$VETH1.disable_ipv6=1 > /dev/null
 sysctl -w net.ipv6.conf.$VETH2.disable_ipv6=1 > /dev/null
