@@ -149,9 +149,28 @@ sudo ip netns exec netns1 ping 10.0.0.2
 
 ```
 
+## Testing
 
+This project includes test suite for the client-server protocol and network components.
 
----
+### Running Tests
+
+**All tests:**
+```bash
+# Rust integration tests
+cargo test
+
+# Go CNI plugin tests
+cd noop-plugin && go test -v
+
+# Go XDP forwarder tests
+cd xdp-forwarder && go test -v
+```
+
+**Run all tests at once:**
+```bash
+cargo test && cd noop-plugin && go test && cd ../xdp-forwarder && go test
+```
 
 ## 5. Development Roadmap
 
@@ -166,8 +185,6 @@ The project is currently in **Phase 3: The Data Plane**. Below is the immediate 
 * Performs MAC address rewriting (Source/Dest swapping).
 * Redirects packets between interfaces using `bpf_redirect` (Egress).
 
-
-
 ### [Upcoming] Month 3, Week 2: The Overlay Network (VXLAN)
 
 * **Objective:** Evolve the forwarder into a Virtual Tunnel Endpoint (VTEP).
@@ -177,8 +194,6 @@ The project is currently in **Phase 3: The Data Plane**. Below is the immediate 
 * **Decapsulation:** Parse incoming VXLAN packets, validate VNI, and strip headers.
 * Support for RFC 7348 VXLAN packet structure.
 
-
-
 ### [Upcoming] Month 3, Week 3: Dynamic Forwarding (eBPF Maps)
 
 * **Objective:** Remove hardcoded logic and implement a Forwarding Database (FDB).
@@ -186,8 +201,6 @@ The project is currently in **Phase 3: The Data Plane**. Below is the immediate 
 * **FDB Map:** `BPF_MAP_TYPE_HASH` storing `[VNI, MAC] -> [Type, RemoteIP/IfIndex]`.
 * **Lookups:** Logic to distinguish between LOCAL (direct redirect) and REMOTE (VXLAN encap) traffic.
 * **Control Plane:** Go loader acts as the initial map population tool.
-
-
 
 ### [Upcoming] Month 3, Week 4: The SDN Agent
 
