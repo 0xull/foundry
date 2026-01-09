@@ -1,6 +1,5 @@
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 use tempfile::TempDir;
