@@ -192,10 +192,11 @@ func TestForwardingLogic(t *testing.T) {
 			shouldForward := false
 
 			// Simulate forwarding logic from forwarder.c
-			if tc.ingressIndex == VETH1_INDEX {
+			switch tc.ingressIndex {
+			case VETH1_INDEX:
 				targetIndex = VETH2_INDEX
 				shouldForward = true
-			} else if tc.ingressIndex == VETH2_INDEX {
+			case VETH2_INDEX:
 				targetIndex = VETH1_INDEX
 				shouldForward = true
 			}
@@ -339,10 +340,6 @@ func TestNetworkNamespacePathFormat(t *testing.T) {
 // TestSignalHandling validates signal channel setup
 func TestSignalHandling(t *testing.T) {
 	stopper := make(chan os.Signal, 1)
-	
-	if stopper == nil {
-		t.Fatal("Failed to create signal channel")
-	}
 
 	if cap(stopper) != 1 {
 		t.Errorf("Expected channel capacity of 1, got %d", cap(stopper))

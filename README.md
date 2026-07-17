@@ -33,10 +33,12 @@ The project follows a split-binary architecture to separate user interaction fro
 │   │   └── foundry.rs      # CLI Client entry point
 │   └── main.rs             # Daemon (foundryd) entry point & core logic
 ├── xdp-forwarder/          # [Active] eBPF Data Plane implementation
-│   ├── forwarder.c         # XDP C source code (Kernel Land)
+│   ├── bpf/
+│   │   ├── forwarder.c     # XDP C source code (Kernel Land)
+│   │   └── dummy.c         # No-op XDP program used by the lab setup script
 │   ├── main.go             # Go Loader & Lifecycle Manager (User Land)
 │   ├── gen.go              # bpf2go generation directive
-│   └── setup-lab.sh        # Network namespace topology setup script
+│   └── setup_lab.sh        # Network namespace topology setup script
 ├── Cargo.toml              # Rust project definition
 ├── foundryd.service        # systemd unit file
 └── README.md               # Documentation
@@ -120,7 +122,7 @@ go generate
 3. **Setup the Verification Lab:**
 Creates two network namespaces (`netns1`, `netns2`) connected via veth pairs to the host.
 ```bash
-sudo ./setup-lab.sh
+sudo ./setup_lab.sh
 
 ```
 
